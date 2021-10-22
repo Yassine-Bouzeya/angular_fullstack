@@ -1,0 +1,56 @@
+version: 2
+jobs:
+  build:
+    docker:
+     - image: circleci/node:12-browsers
+     - image: mongo
+       command: mongod
+
+    working_directory: ~/generator-angular-fullstack
+
+    environment:
+      NODE_ENV: test
+
+    branches:
+      ignore:
+        - gh-pages
+
+    steps:
+      - checkout
+      - run: git submodule sync && git submodule update --init
+
+      # Generator npm dependencies
+      - restore_cache:
+          keys:
+            - generator-angular-fullstack-npm-{{ .Branch }}-{{ checksum "package.json" }}
+            - generator-angular-fullstack-npm-{{ .Branch }}
+            - generator-angular-fullstack-npm-
+      - run: npm install --quiet
+      - save_cache:
+          key: generator-angular-fullstack-npm-{{ .Branch }}-{{ checksum "package.json" }}
+          paths:
+            - ~/generator-angular-fullstack/node_modules
+
+      # Test fixtures
+      - run: npx gulp updateFixtures:test
+      - restore_cache:
+          keys:
+            - generator-angular-fullstack-npm-fixtures-{{ .Branch }}-{{ checksum "templates/app/_package.json" }}
+            - generator-angular-fullstack-npm-fixtures-{{ .Branch }}
+            - generator-angular-fullstack-npm-fixtures-
+      - run: npx gulp installFixtures
+      - save_cache:
+          key: generator-angular-fullstack-npm-fixtures-{{ .Branch }}-{{ checksum "templates/app/_package.json" }}
+          paths:
+            - ~/generator-angular-fullstack/test/fixtures/node_modules
+
+      - run: npx gulp build
+      - run: npm test
+
+#      - deploy:
+#          command: |
+#            if [ "${CIRCLE_BRANCH}" == "master" ]; then
+#              git config --global user.email "circleci@circleci.com"
+#              git config --global user.name "CircleCI"
+#              cd docs && npm install && npm run build && npm run deploy
+#            fi
